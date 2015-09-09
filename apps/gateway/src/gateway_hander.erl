@@ -40,6 +40,7 @@ init(Req, Opts) ->
 websocket_handle({binary, Data}, Req, State = #state{isfirst = true,ping = Ping}) ->
   case get_room_pid(Data) of
     {ok, RoomPid} ->
+      ok = gen_server:call(RoomPid,{enterroom,self()}),
       {reply, {binary, Data}, Req, State#state{isfirst = false, roompid = RoomPid,ping=Ping+1}};
     {error, Reson} ->
       ?TRACE("first data message must be room name",Reson),
