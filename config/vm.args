@@ -1,0 +1,6 @@
+-name gateway@127.0.0.1
+
+-setcookie game_cookie
+
++K true
++A30
