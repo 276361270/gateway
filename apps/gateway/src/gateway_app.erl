@@ -30,6 +30,8 @@ start(_StartType, _StartArgs) ->
 
 %%--------------------------------------------------------------------
 stop(_State) ->
+  cowboy:stop_listener(https),
+  cowboy:stop_listener(http),
   ok.
 
 %%====================================================================
