@@ -1,0 +1,13 @@
+{application, gateway,
+ [{description, "An OTP application"}
+ ,{vsn, "0.1.0"}
+ ,{registered, []}
+ ,{mod, {'gateway_app', []}}
+ ,{applications,
+   [kernel
+   ,stdlib
+   ,platfrom
+   ]}
+ ,{env,[]}
+ ,{modules, []}
+ ]}.
