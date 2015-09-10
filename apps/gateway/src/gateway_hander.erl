@@ -1,4 +1,5 @@
 -module(gateway_hander).
+-behaviour(cowboy_websocket).
 -include_lib("erlware_commons/include/log.hrl").
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -26,8 +27,9 @@
 %% | {module(), Req, any(), timeout()}
 %% | {module(), Req, any(), timeout(), hibernate}
 init(Req, Opts) ->
-  {ok, TimeRef} = timer:send_after(300, disconnect),
+  {ok, TimeRef} = timer:send_after(3000, disconnect),
   {Address, Port} = erlang:element(8, Req),
+  ?TRACE(Opts),
   {cowboy_websocket, Req, #state{otp = Opts, ip = Address, port = Port, timeref = TimeRef}, hibernate}.
 
 %% handle client send msg
@@ -41,7 +43,7 @@ websocket_handle({binary, Data}, Req, State = #state{isfirst = true,ping = Ping}
   case get_room_pid(Data) of
     {ok, RoomPid} ->
       ok = gen_server:call(RoomPid,{enterroom,self()}),
-      {reply, {binary, Data}, Req, State#state{isfirst = false, roompid = RoomPid,ping=Ping+1}};
+      {reply, {binary, Data}, Req, State#state{isfirst = false, roompid = RoomPid,ping=Ping+1}, hibernate};
     {error, Reson} ->
       ?TRACE("first data message must be room name",Reson),
       {stop, Req, State}
@@ -49,11 +51,11 @@ websocket_handle({binary, Data}, Req, State = #state{isfirst = true,ping = Ping}
 
 websocket_handle({binary, Data}, Req, State = #state{isfirst = false, roompid = RoomPid}) ->
   gen_server:cast(RoomPid, Data),
-  {ok, Req, State};
+  {ok, Req, State, hibernate};
 
 websocket_handle(_Data, Req, State) ->
   ?TRACE("UnDeal Data",_Data),
-  {ok, Req, State}.
+  {ok, Req, State, hibernate}.
 
 %% 超时发送数据
 %%{ok, Req, State}
@@ -70,7 +72,7 @@ websocket_info(disconnect, Req, State = #state{ping = Ping, timeref = TimeRef}) 
   end;
 %%gen_cast处理
 websocket_info({'$gen_cast', {mess_to_client, DataObj}}, Req, State) ->
-  {reply, {binary, DataObj}, Req, State};
+  {reply, {binary, DataObj}, Req, State, hibernate};
 
 websocket_info({'$gen_cast', {disconnect, Info}}, Req, State = #state{timeref = Timeref}) ->
   timer:cancel(Timeref),
@@ -78,11 +80,11 @@ websocket_info({'$gen_cast', {disconnect, Info}}, Req, State = #state{timeref = 
   {stop, Req, State};
 %%给自己发送消息
 websocket_info({binary, {send_to_self, Binary}}, Req, State) ->
-  {reply, {binary, Binary}, Req, State};
+  {reply, {binary, Binary}, Req, State, hibernate};
 
 websocket_info(_Info, Req, State) ->
   io:format("websocket_info~p~n", [_Info]),
-  {ok, Req, State}.
+  {ok, Req, State, hibernate}.
 
 %%没有登录就不存在登录的用户
 terminate(_Reason, _Req, _State) ->

@@ -25,10 +25,11 @@ start_link([WebPort, WebListenNum]) ->
 init([WebPort, WebListenNum]) ->
   Dispatch = cowboy_router:compile([
     {'_', [
-      {"/",gateway_hander, []}
+      {"/",gateway_hander, []},
+      {"/index", cowboy_static, {priv_file, gateway, "index.html"}},
+      {"/static/[...]", cowboy_static, {priv_dir, gateway, "static"}}
     ]}
   ]),
-  io:format("~p~n", [WebListenNum]),
   {ok, _} = cowboy:start_http(http, WebListenNum, [{port, WebPort}], [{env, [{dispatch, Dispatch}]}]),
   Children = [],
   {ok, {{one_for_one, 5, 10}, Children}}.
