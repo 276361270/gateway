@@ -2,5 +2,12 @@
 
 -setcookie game_cookie
 
+-env ERL_MAX_ETS_TABLES 102400
+
+-env ERL_MAX_PORTS 102400
+
++P 250000
+
 +K true
+
 +A30

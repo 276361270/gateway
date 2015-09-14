@@ -39,22 +39,27 @@ init(Req, Opts) ->
 %% | {reply, cow_ws:frame() | [cow_ws:frame()], Req, State, hibernate}
 %% | {stop, Req, State}
 %%第一个数据包必须是房间名称 如果房间 名称存在 返回房间数据
-websocket_handle({binary, Data}, Req, State = #state{isfirst = true,ping = Ping}) ->
+websocket_handle({binary, Data}, Req, State = #state{isfirst = true, ping = Ping}) ->
   case get_room_pid(Data) of
     {ok, RoomPid} ->
-      ok = gen_server:call(RoomPid,{enterroom,self()}),
-      {reply, {binary, Data}, Req, State#state{isfirst = false, roompid = RoomPid,ping=Ping+1}, hibernate};
+      ok = gen_server:call(RoomPid, {self(), enterroom, self()}),
+      {reply, {binary, Data}, Req, State#state{isfirst = false, roompid = RoomPid, ping = Ping + 1}, hibernate};
     {error, Reson} ->
-      ?TRACE("first data message must be room name",Reson),
+      ?TRACE("first data message must be room name", Reson),
       {stop, Req, State}
   end;
 
 websocket_handle({binary, Data}, Req, State = #state{isfirst = false, roompid = RoomPid}) ->
-  gen_server:cast(RoomPid, Data),
+  case is_process_alive(RoomPid) of
+    true ->
+      gen_server:cast(RoomPid, {self(), Data});
+    false ->
+      ?TRACE("websocket_handle deal message error roompid die", [RoomPid])
+  end,
   {ok, Req, State, hibernate};
 
 websocket_handle(_Data, Req, State) ->
-  ?TRACE("UnDeal Data",_Data),
+  ?TRACE("UnDeal Data", _Data),
   {ok, Req, State, hibernate}.
 
 %% 超时发送数据
@@ -83,11 +88,17 @@ websocket_info({binary, {send_to_self, Binary}}, Req, State) ->
   {reply, {binary, Binary}, Req, State, hibernate};
 
 websocket_info(_Info, Req, State) ->
-  io:format("websocket_info~p~n", [_Info]),
+  ?TRACE("websocket_info~p~n", [_Info]),
   {ok, Req, State, hibernate}.
 
-%%没有登录就不存在登录的用户
-terminate(_Reason, _Req, _State) ->
+%%掉线处理
+terminate(_Reason, _Req, _State = #state{roompid = RoomPid}) ->
+  case is_process_alive(RoomPid) of
+    true ->
+      gen_server:cast(RoomPid, {self(), disconnect});
+    false ->
+      ?TRACE("socket pid close  roompid die", [RoomPid])
+  end,
   ok.
 
 %% ------------------------------------------------------------------
@@ -97,11 +108,11 @@ terminate(_Reason, _Req, _State) ->
 send(Binary) ->
   self() ! {binary, {send_to_self, Binary}}.
 
-get_room_pid(<<"">>)->
-  {error,"the room is empty"};
+get_room_pid(<<"">>) ->
+  {error, "the room is empty"};
 
-get_room_pid(RoomName) when is_binary(RoomName)->
-  {ok,self()};
+get_room_pid(RoomName) when is_binary(RoomName) ->
+  {ok, self()};
 
-get_room_pid(RoomName)->
+get_room_pid(RoomName) ->
   get_room_pid(ec_cnv:to_binary(RoomName)).
